@@ -165,12 +165,12 @@ int main(int argc, char** argv) {
     }
 
     if (yyparse() == 0) {
-        printf("\n--- ABSTRACT SYNTAX TREE ---\n");
-        print_ast_tree(root, 0);
-        
         printf("\n--- SEMANTIK ANALIZ ---\n");
         if (semantic_analysis(root) == 0) {
             printf("Semantik Analiz Basarili!\n");
+
+            printf("\n--- ABSTRACT SYNTAX TREE ---\n");
+            print_ast_tree(root, 0);
             
             // BURAYI DEGISTIRDIK: Çıktı dosyası ismi verildi
             const char* output_filename = "output.vm";

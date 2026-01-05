@@ -30,6 +30,7 @@ typedef struct {
 
 FunctionSymbol func_table[MAX_FUNCS];
 int func_count = 0;
+DataType current_func_return_type; // Track current function's return type
 
 // --- YARDIMCI FONKSIYONLAR ---
 
@@ -123,6 +124,7 @@ int analyze_node(ASTNode* node) {
 
         case NODE_FUNC_DECL:
             current_scope++; 
+            current_func_return_type = node->data_type; // Set expected return type
             ASTNode* param = node->left;
             while(param != NULL) {
                 add_symbol(param->id, param->data_type, param->line);
@@ -176,7 +178,7 @@ int analyze_node(ASTNode* node) {
                 ASTNode* arg = node->left;
                 int arg_count = 0;
                 while(arg != NULL) {
-                    analyze_node(arg); 
+                    if (analyze_node(arg) != 0) return 1; 
                     if (arg_count < func_table[f_idx].param_count) {
                         if (arg->data_type != func_table[f_idx].param_types[arg_count]) {
                             fprintf(stderr, "Hata (Satir %d): '%s' icin %d. arguman tipi hatali!\n", node->line, node->id, arg_count+1);
@@ -194,15 +196,28 @@ int analyze_node(ASTNode* node) {
             break;
 
         case NODE_RETURN:
-            if (node->left) analyze_node(node->left);
+            if (node->left) {
+                if (analyze_node(node->left) != 0) return 1;
+                if (node->left->data_type != current_func_return_type) {
+                    fprintf(stderr, "HATA (Satir %d): Fonksiyon donus tipi uyusmuyor! Beklenen: %d, Bulunan: %d\n", 
+                            node->line, current_func_return_type, node->left->data_type);
+                    return 1;
+                }
+            }
             break;
 
         case NODE_IF:
         case NODE_UNLESS:
         case NODE_WHILE:
             if (analyze_node(node->left) != 0) return 1;
+            if (node->left->data_type != TYPE_INT) {
+                fprintf(stderr, "HATA (Satir %d): Kosul ifadesi tamsayi (INT) olmalidir!\n", node->line);
+                return 1;
+            }
             if (analyze_node(node->right) != 0) return 1;
-            if (node->else_body) analyze_node(node->else_body);
+            if (node->else_body) {
+                if (analyze_node(node->else_body) != 0) return 1;
+            }
             break;
 
         case NODE_BINOP:
@@ -216,7 +231,7 @@ int analyze_node(ASTNode* node) {
             break;
 
         case NODE_PRINT:
-            analyze_node(node->left);
+            if (analyze_node(node->left) != 0) return 1;
             break;
             
         case NODE_NUM_INT: node->data_type = TYPE_INT; break;
