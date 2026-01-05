@@ -79,6 +79,23 @@ Her gramer kuralı eşleştiğinde, `ast.c` içindeki fonksiyonlar çağrılarak
 
 Kod üretimi ve çalıştırma işlemi iki aşamalıdır. Öncelikle derleyici çalıştırılarak kaynak koddan bytecode (`.vm`) üretilir, ardından bu bytecode sanal makine (VM) üzerinde çalıştırılır.
 
+**0. Derleyiciyi Oluşturma (Build):**
+
+Öncelikle kaynak kodları derleyerek `mycompiler` ve `vm` çalıştırılabilir dosyalarını oluşturmalısınız:
+
+```bash
+bison -d parser.y
+flex lexer.l
+gcc -o mycompiler parser.tab.c lex.yy.c ast.c compiler.c -lm
+gcc -o vm vm.c -lm
+```
+
+Alternatif olarak, `make` komutu ile otomatik derleyebilirsiniz:
+
+```bash
+make
+```
+
 **1. Derleme (Compile):**
 
 ```bash
