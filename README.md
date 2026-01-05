@@ -139,7 +139,7 @@ Bu derleyici, kayıtçı (register) tabanlı değil, **Yığın (Stack)** tabanl
 Üretilen kodlar `.vm` uzantılı bir dosyaya yazılır. Bu dosya, satır satır okunarak yorumlanabilir (interpreted) veya binary formata çevrilebilir.
 
 - **Valid Output:** `PUSH_INT 5`, `ADD_I`, `JZ LABEL_1`
-- **Invalid State:** Stack underflow (yığın boşken veri çekme) veya Type mismatch (runtime'da float ile int toplama - gerçi bu derleyicide semantik analizde engellenir).
+- **Invalid State:** Stack underflow (yığın boşken veri çekme) veya Type mismatch
 
 ---
 
