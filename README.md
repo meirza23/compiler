@@ -125,7 +125,7 @@ Bu derleyici, kayıtçı (register) tabanlı değil, **Yığın (Stack)** tabanl
 
 ### 📝 Kod Üretim Mantığı (Traversal)
 
-`generate_code` fonksiyonu AST'yi **Depth-First (Derinlik Öncelikli)** gezer. Bu yöntem, "Postfix" (Sonsal) notasyona benzer bir kod üretimi sağlar.
+`generate_code` fonksiyonu AST'yi **Depth-First (Derinlik Öncelikli)** gezer. Bu yöntem, "Postfix" (Sonsal) notasyonu sağlar.
 
 **Örnek Dönüşüm:** `x := a + b`
 
