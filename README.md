@@ -75,6 +75,28 @@ Her gramer kuralı eşleştiğinde, `ast.c` içindeki fonksiyonlar çağrılarak
 
 ## 3. Code Generation (Kod Üretimi)
 
+### 🚀 Derleme ve Çalıştırma Adımları
+
+Kod üretimi ve çalıştırma işlemi iki aşamalıdır. Öncelikle derleyici çalıştırılarak kaynak koddan bytecode (`.vm`) üretilir, ardından bu bytecode sanal makine (VM) üzerinde çalıştırılır.
+
+**1. Derleme (Compile):**
+
+```bash
+./mycompiler test.txt
+```
+
+_Bu işlem sonucunda `output.vm` dosyası oluşturulur._
+
+**2. Çalıştırma (Run):**
+
+```bash
+./vm output.vm
+```
+
+_Sanal makine `output.vm` dosyasını okur ve çalıştırır._
+
+---
+
 Derleyicinin son aşaması, oluşturulan AST'yi gezerek (Traversal) hedef makine için çalıştırılabilir kod üretmektir.
 
 ### ⚙️ Hedef: Stack-Based Virtual Machine (VM)

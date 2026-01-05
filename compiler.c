@@ -237,22 +237,9 @@ int semantic_analysis(ASTNode* node) {
 
 // --- SANAL MAKINE (VM) & KOD URETIMI ---
 
-typedef struct {
-    DataType type;
-    union { int i_val; float f_val; } val;
-} StackItem;
-
-StackItem stack[100];
-int sp = -1;
-StackItem memory[100]; 
-int label_counter = 0;
-
 // YENI: Dosya pointer'ı
 static FILE *vm_out = NULL;
-
-void push_int(int v) { sp++; stack[sp].type = TYPE_INT; stack[sp].val.i_val = v; }
-void push_float(float v) { sp++; stack[sp].type = TYPE_FLOAT; stack[sp].val.f_val = v; }
-StackItem pop() { return stack[sp--]; }
+int label_counter = 0;
 
 void generate_node_code(ASTNode* node);
 
@@ -264,18 +251,61 @@ void generate_code(ASTNode* node, const char* filename) {
         return;
     }
 
+    // Programın başlangıcı - Main'e atla
+    fprintf(vm_out, "JMP MAIN\n");
+
     ASTNode* curr = node->left; 
     while(curr != NULL) {
-        if (curr->type == NODE_FUNC_DECL && strcmp(curr->id, "main") == 0) {
-            fprintf(vm_out, "--- MAIN BASLIYOR ---\n");
+        if (curr->type == NODE_FUNC_DECL) {
+            if (strcmp(curr->id, "main") == 0) {
+                fprintf(vm_out, "MAIN:\n");
+            } else {
+                fprintf(vm_out, "FUNC_%s:\n", curr->id);
+            }
+            // Parametreleri stack'ten alıp yerel değişkenlere ata (ters sırada)
+            // VM implementasyonunda parametreler stack'te olacak.
+            // Burada basit bir implementasyon yapıyoruz, parametreleri DECLARE ve STORE ile alıyoruz.
+            // Ancak bizim dilimizde parametreler zaten scope içinde tanımlı semboller.
+            // VM tarafında CALL işlemi parametreleri stack'e atmış olmalı.
+            // Fonksiyon girişinde bu değerleri pop edip ilgili değişkenlere store etmeliyiz.
+            
+            ASTNode* param = curr->left;
+            // Parametreler stack'te: arg1, arg2, ... (en üstte son argüman var varsayalım veya tam tersi)
+            // Genelde calling convention: push arg1, push arg2 -> call. Stack top: arg2.
+            // O zaman pop -> arg2, pop -> arg1.
+            // Yani parametre listesinin tersini almalıyız ya da VM'i ona göre ayarlamalıyız.
+            // Basitlik için: VM tarafında CALL yapılırken argümanlar sırayla pushlanır.
+            // Fonksiyon içinde sondan başa doğru pop yapılır.
+            
+            // Parametre sayısını bul
+            int p_count = 0;
+            ASTNode* p = param;
+            while(p) { p_count++; p = p->next; }
+            
+            // Parametreleri bir diziye alıp ters sırada işle
+            char* params[MAX_PARAMS];
+            p = param;
+            for(int i=0; i<p_count; i++) {
+                params[i] = p->id;
+                p = p->next;
+            }
+            
+            for(int i=p_count-1; i>=0; i--) {
+                fprintf(vm_out, "STORE %s\n", params[i]);
+            }
+
             generate_node_code(curr->right); 
-            fprintf(vm_out, "--- MAIN BITTI ---\n");
-            fclose(vm_out); // İşi bitince kapat
-            return;
+            
+            // Void fonksiyonlar için otomatik return (main hariç, main exit eder)
+            if (strcmp(curr->id, "main") != 0) {
+                fprintf(vm_out, "RETURN\n");
+            } else {
+                fprintf(vm_out, "HALT\n");
+            }
         }
         curr = curr->next;
     }
-    printf("UYARI: 'main' fonksiyonu bulunamadi, kod uretilmedi.\n");
+    
     fclose(vm_out);
 }
 
@@ -287,50 +317,41 @@ void generate_node_code(ASTNode* node) {
         case NODE_PROGRAM: 
             break;
 
-        case NODE_BLOCK: generate_node_code(node->left); break;
+        case NODE_BLOCK: 
+            {
+                ASTNode* stmt = node->left;
+                while(stmt != NULL) {
+                    generate_node_code(stmt);
+                    stmt = stmt->next;
+                }
+            }
+            break;
         case NODE_DECL: fprintf(vm_out, "DECLARE %s\n", node->id); break;
         
         case NODE_ASSIGN:
             generate_node_code(node->left);
             fprintf(vm_out, "STORE %s\n", node->id);
-            int addr = lookup_symbol_vm(node->id); 
-            if(addr != -1) memory[addr] = pop(); else pop();
             break;
             
         case NODE_VAR:
             fprintf(vm_out, "LOAD %s\n", node->id);
-            int v_addr = lookup_symbol_vm(node->id); 
-            if(v_addr != -1) { sp++; stack[sp] = memory[v_addr]; } else push_int(0);
             break;
             
-        case NODE_NUM_INT: fprintf(vm_out, "PUSH_INT %d\n", node->int_val); push_int(node->int_val); break;
-        case NODE_NUM_FLOAT: fprintf(vm_out, "PUSH_FLOAT %f\n", node->float_val); push_float(node->float_val); break;
+        case NODE_NUM_INT: fprintf(vm_out, "PUSH_INT %d\n", node->int_val); break;
+        case NODE_NUM_FLOAT: fprintf(vm_out, "PUSH_FLOAT %f\n", node->float_val); break;
         
         case NODE_PRINT:
             generate_node_code(node->left);
-            StackItem res = pop();
-            fprintf(vm_out, "PRINT >> "); // Bu komut dosyaya
-            // Asagidaki printf'ler dosya icinde sabit deger gosteremeyecegi icin
-            // burada sadece "PRINT" komutunu bytecode'a yaziyoruz. 
-            // Ancak bu VM ayni zamanda "calisan" bir VM oldugu icin (simulasyon)
-            // calisma sonucunu hala terminale basmasi mantikli olabilir.
-            // Ama siz bytecode istediniz. Bytecode dosyasinda sonuc gorulmez, komut gorulur.
-            // O yuzden dosyaya sunu yazalim:
-            if (res.type == TYPE_INT) fprintf(vm_out, "[Deger: %d]\n", res.val.i_val); 
-            else fprintf(vm_out, "[Deger: %f]\n", res.val.f_val);
+            fprintf(vm_out, "PRINT\n");
             break;
 
         case NODE_WHILE:
             lbl1 = label_counter++; lbl2 = label_counter++;
             fprintf(vm_out, "LABEL_START_%d:\n", lbl1);
-            while(1) { 
-                generate_node_code(node->left); 
-                StackItem cond = pop();
-                fprintf(vm_out, "JZ LABEL_END_%d\n", lbl2);
-                if ((cond.type==TYPE_INT && !cond.val.i_val) || (cond.type==TYPE_FLOAT && !cond.val.f_val)) break;
-                generate_node_code(node->right); 
-                fprintf(vm_out, "JMP LABEL_START_%d\n", lbl1);
-            }
+            generate_node_code(node->left); 
+            fprintf(vm_out, "JZ LABEL_END_%d\n", lbl2);
+            generate_node_code(node->right); 
+            fprintf(vm_out, "JMP LABEL_START_%d\n", lbl1);
             fprintf(vm_out, "LABEL_END_%d:\n", lbl2);
             break;
 
@@ -338,11 +359,10 @@ void generate_node_code(ASTNode* node) {
             lbl1 = label_counter++; lbl2 = label_counter++;
             generate_node_code(node->left);
             fprintf(vm_out, "JZ LABEL_ELSE_%d\n", lbl1);
-            StackItem c_if = pop();
-            int is_true = (c_if.type==TYPE_INT ? c_if.val.i_val : c_if.val.f_val);
-            if (is_true) { generate_node_code(node->right); fprintf(vm_out, "JMP LABEL_EXIT_%d\n", lbl2); }
+            generate_node_code(node->right);
+            fprintf(vm_out, "JMP LABEL_EXIT_%d\n", lbl2);
             fprintf(vm_out, "LABEL_ELSE_%d:\n", lbl1);
-            if (!is_true && node->else_body) generate_node_code(node->else_body);
+            if (node->else_body) generate_node_code(node->else_body);
             fprintf(vm_out, "LABEL_EXIT_%d:\n", lbl2);
             break;
 
@@ -350,45 +370,40 @@ void generate_node_code(ASTNode* node) {
             lbl1 = label_counter++;
             generate_node_code(node->left);
             fprintf(vm_out, "JNZ LABEL_SKIP_%d\n", lbl1); 
-            StackItem c_unless = pop();
-            int u_true = (c_unless.type==TYPE_INT ? c_unless.val.i_val : c_unless.val.f_val);
-            if (!u_true) { generate_node_code(node->right); }
+            generate_node_code(node->right);
             fprintf(vm_out, "LABEL_SKIP_%d:\n", lbl1);
             break;
 
         case NODE_BINOP:
             generate_node_code(node->left);
             generate_node_code(node->right);
-            StackItem b = pop(); StackItem a = pop();
-            if (a.type == TYPE_INT) {
-                if (strcmp(node->id, "+") == 0) { fprintf(vm_out, "ADD_I\n"); push_int(a.val.i_val + b.val.i_val); }
-                else if (strcmp(node->id, "-") == 0) { fprintf(vm_out, "SUB_I\n"); push_int(a.val.i_val - b.val.i_val); }
-                else if (strcmp(node->id, "*") == 0) { fprintf(vm_out, "MUL_I\n"); push_int(a.val.i_val * b.val.i_val); }
-                else if (strcmp(node->id, "/") == 0) { fprintf(vm_out, "DIV_I\n"); push_int(a.val.i_val / b.val.i_val); }
-                else if (strcmp(node->id, "%") == 0) { fprintf(vm_out, "MOD_I\n"); push_int(a.val.i_val % b.val.i_val); }
-                else if (strcmp(node->id, "^") == 0) { fprintf(vm_out, "POW_I\n"); push_int((int)pow(a.val.i_val, b.val.i_val)); }
-                else if (strcmp(node->id, ">") == 0) { fprintf(vm_out, "GT_I\n"); push_int(a.val.i_val > b.val.i_val); }
-                else if (strcmp(node->id, "<") == 0) { fprintf(vm_out, "LT_I\n"); push_int(a.val.i_val < b.val.i_val); }
-                else if (strcmp(node->id, "==") == 0) { fprintf(vm_out, "EQ_I\n"); push_int(a.val.i_val == b.val.i_val); }
-                else if (strcmp(node->id, "!=") == 0) { fprintf(vm_out, "NEQ_I\n"); push_int(a.val.i_val != b.val.i_val); }
-            } else {
-                if (strcmp(node->id, "+") == 0) { fprintf(vm_out, "ADD_F\n"); push_float(a.val.f_val + b.val.f_val); }
-                else if (strcmp(node->id, "-") == 0) { fprintf(vm_out, "SUB_F\n"); push_float(a.val.f_val - b.val.f_val); }
-                else if (strcmp(node->id, "*") == 0) { fprintf(vm_out, "MUL_F\n"); push_float(a.val.f_val * b.val.f_val); }
-                else if (strcmp(node->id, "/") == 0) { fprintf(vm_out, "DIV_F\n"); push_float(a.val.f_val / b.val.f_val); }
-                else if (strcmp(node->id, "^") == 0) { fprintf(vm_out, "POW_F\n"); push_float(powf(a.val.f_val, b.val.f_val)); }
-                else if (strcmp(node->id, ">") == 0) { fprintf(vm_out, "GT_F\n"); push_int(a.val.f_val > b.val.f_val); }
-                else if (strcmp(node->id, "<") == 0) { fprintf(vm_out, "LT_F\n"); push_int(a.val.f_val < b.val.f_val); }
-            }
+            if (strcmp(node->id, "+") == 0) fprintf(vm_out, "ADD\n");
+            else if (strcmp(node->id, "-") == 0) fprintf(vm_out, "SUB\n");
+            else if (strcmp(node->id, "*") == 0) fprintf(vm_out, "MUL\n");
+            else if (strcmp(node->id, "/") == 0) fprintf(vm_out, "DIV\n");
+            else if (strcmp(node->id, "%") == 0) fprintf(vm_out, "MOD\n");
+            else if (strcmp(node->id, "^") == 0) fprintf(vm_out, "POW\n");
+            else if (strcmp(node->id, ">") == 0) fprintf(vm_out, "GT\n");
+            else if (strcmp(node->id, "<") == 0) fprintf(vm_out, "LT\n");
+            else if (strcmp(node->id, "==") == 0) fprintf(vm_out, "EQ\n");
+            else if (strcmp(node->id, "!=") == 0) fprintf(vm_out, "NEQ\n");
             break;
 
         case NODE_RETURN:
-            generate_node_code(node->left);
-            fprintf(vm_out, "RETURN (Stack Top)\n");
+            if (node->left) generate_node_code(node->left);
+            fprintf(vm_out, "RETURN\n");
             break;
 
         case NODE_FUNC_CALL:
-            fprintf(vm_out, "CALL %s\n", node->id);
+            // Argümanları hesapla ve stack'e at
+            {
+                ASTNode* arg = node->left;
+                while(arg != NULL) {
+                    generate_node_code(arg);
+                    arg = arg->next;
+                }
+                fprintf(vm_out, "CALL FUNC_%s\n", node->id);
+            }
             break;
             
         case NODE_READ:
@@ -398,5 +413,5 @@ void generate_node_code(ASTNode* node) {
         default:
             break;
     }
-    generate_node_code(node->next);
+    // generate_node_code(node->next); // REMOVED TAIL RECURSION
 }
