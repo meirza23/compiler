@@ -141,22 +141,6 @@ Bu derleyici, kayıtçı (register) tabanlı değil, **Yığın (Stack)** tabanl
 - **Valid Output:** `PUSH_INT 5`, `ADD_I`, `JZ LABEL_1`
 - **Invalid State:** Stack underflow (yığın boşken veri çekme) veya Type mismatch (runtime'da float ile int toplama - gerçi bu derleyicide semantik analizde engellenir).
 
-### 🔍 Tam Kod Üretim Örneği
-
-Aşağıdaki basit kodun nasıl dönüştüğünü inceleyelim:
-
-**Kaynak Kod:**
-
-```text
-int x.
-x := 10.
-if (x > 5) begin
-    print(x).
-end
-```
-
----
-
 ## 4. ✨ Proje Özellikleri ve Test Senaryoları
 
 Bu derleyici, standart dillerden farklılaşan özelliklere sahiptir. Aşağıda bu özellikler ve çalışan test senaryoları sunulmuştur.
